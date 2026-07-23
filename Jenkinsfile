@@ -16,6 +16,15 @@ pipeline {
                 checkout scm
             }
         }
+
+        stage('terraform init') {
+            sh 'terraform init'
+        }
+
+        stage('terraform plan') {
+
+            sh 'terraform plan'
+        }
     }
 
     post { 
