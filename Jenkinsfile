@@ -1,9 +1,23 @@
 pipeline {
-    agent any
+    agent {
+        kubernetes {
+            cloud 'DockerDesktop'
+            inheritFrom 'terraform-agent'
+        }
+    }
 
     parameters {
-        choice(name: 'ACTION', choices: ['apply', 'destroy'], description: 'Choose the action to perform')
-        string(name: 'ENVIRONMENT', defaultValue: 'dev', description: 'Specify the environment (e.g., dev, staging, prod)')
+        choice(
+            name: 'ACTION',
+            choices: ['apply', 'destroy'],
+            description: 'Choose the action to perform'
+        )
+
+        string(
+            name: 'ENVIRONMENT',
+            defaultValue: 'dev',
+            description: 'Specify the environment'
+        )
     }
 
     environment {
@@ -11,38 +25,47 @@ pipeline {
     }
 
     stages {
-        stage('code checkout') {
+        stage('Code Checkout') {
             steps {
                 checkout scm
             }
         }
 
-        stage('terraform init') {
+        stage('Terraform Init') {
             steps {
-            sh 'terraform init'
+                container('terraform') {
+                    dir("${TERRAFORM_DIR}") {
+                        sh 'terraform init'
+                    }
+                }
             }
         }
 
-        stage('terraform plan') {
+        stage('Terraform Plan') {
             steps {
-             sh 'terraform plan'
-          }
+                container('terraform') {
+                    dir("${TERRAFORM_DIR}") {
+                        sh 'terraform plan'
+                    }
+                }
+            }
         }
     }
 
-    post { 
+    post {
         success {
-            echo "Succeeded"
+            echo 'Succeeded'
         }
 
         failure {
-            echo "Failed"
+            echo 'Failed'
         }
 
-        unstable { 
-            echo "Unstable"
+        unstable {
+            echo 'Unstable'
         }
-        always { 
+
+        always {
             cleanWs()
         }
     }
