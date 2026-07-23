@@ -20,11 +20,24 @@ pipeline {
         )
     }
 
-    environment {
-        TERRAFORM_DIR = 'eks-infra-code'
-    }
+        environment {
+            TERRAFORM_DIR     = 'eks-infra-code'
+            AWS_PROFILE       = 'jhansi'
+            AWS_CONFIG_FILE   = '/home/jenkins/.aws/config'
+            AWS_SHARED_CREDENTIALS_FILE = '/home/jenkins/.aws/credentials'
+        }
 
     stages {
+        stage('Test AWS Access') {
+    steps {
+        container('terraform') {
+            sh '''
+                ls -la /home/jenkins/.aws
+                aws sts get-caller-identity --profile "$AWS_PROFILE"
+            '''
+        }
+    }
+}
         stage('Code Checkout') {
             steps {
                 checkout scm

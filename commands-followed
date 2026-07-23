@@ -1,0 +1,6 @@
+Building Jenkins Docker Image
+
+docker build -t bnelli123/eks-python-app:1.0.0 .
+
+docker push bnelli123/eks-python-app:1.0.0
+
