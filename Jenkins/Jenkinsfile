@@ -51,7 +51,7 @@ pipeline {
                 container('terraform') {
                     dir("${TERRAFORM_DIR}") {
                         retry(3) {
-                            timeout(time: 2, unit: 'MINUTES') {
+                            timeout(time: 10, unit: 'MINUTES') {
                                 sh """
                                     terraform init \
                                       -backend-config="backend/${params.ENVIRONMENT}.hcl"
