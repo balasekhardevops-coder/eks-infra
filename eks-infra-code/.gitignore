@@ -1,0 +1,5 @@
+.aws_assume_role.tfvars
+!example.tfvars
+.terraform/
+*.tfstate
+*.tfstate.*
