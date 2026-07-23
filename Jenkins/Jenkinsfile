@@ -13,9 +13,9 @@ pipeline {
             description: 'Choose the action to perform'
         )
 
-        string(
+        choice(
             name: 'ENVIRONMENT',
-            defaultValue: 'dev',
+            choices: ['dev', 'qa', 'stage', 'prod']
             description: 'Specify the environment'
         )
     }
@@ -131,7 +131,7 @@ pipeline {
         stage('Terrafrom Apply') {
             when {
                 expression {
-                    params.ACTION == 'apply' && params.ENVIRONMENT == 'dev'
+                    params.ACTION == 'apply' && (params.ENVIRONMENT == 'dev' || params.ENVIRONMENT == 'prod')
                 }
             }
 
