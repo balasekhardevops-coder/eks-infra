@@ -38,3 +38,13 @@ variable "node_instance_types" {
   type        = list(string)
   default     = ["t3.medium"]
 }
+
+variable "aws_profile" {
+  description = "AWS CLI profile used for authentication"
+  type        = string
+}
+
+variable "aws_role_arn" {
+  description = "IAM role ARN Terraform should assume"
+  type        = string
+}
