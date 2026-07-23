@@ -43,3 +43,38 @@ post {
     always runs regardless of result
 }
 
+
+
+===========================================================================
+Terrafrom Backend:
+
+terraform init -backend-config="backend/dev.hcl"
+
+Terrafrom combines the backend block with the file passed through -backend-config
+
+backend.tf:
+terraform {
+  backend "s3" {
+    encrypt      = true
+    use_lockfile = true
+  }
+}
+
+backend/dev.hcl:
+bucket = "my-terraform-state-bucket"
+key    = "eks/dev/terraform.tfstate"
+region = "us-east-1"
+
+terraform init -backend-config="backend/dev.hcl"
+
+terraform {
+  backend "s3" {
+    bucket       = "my-terraform-state-bucket"
+    key          = "eks/dev/terraform.tfstate"
+    region       = "us-east-1"
+    encrypt      = true
+    use_lockfile = true
+  }
+}
+
+Terraform throws an error if dev.hcl contains arguments that the selected backend does not support.

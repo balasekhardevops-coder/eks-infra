@@ -15,7 +15,7 @@ pipeline {
 
         choice(
             name: 'ENVIRONMENT',
-            choices: ['dev', 'qa', 'stage', 'prod']
+            choices: ['dev', 'qa', 'prod'],
             description: 'Specify the environment'
         )
     }
@@ -27,6 +27,7 @@ pipeline {
         AWS_SHARED_CREDENTIALS_FILE = '/home/jenkins/.aws/credentials'
         TF_IN_AUTOMATION            = 'true'
         TF_CLI_ARGS                 = '-no-color'
+
         TF_VAR_aws_profile          = credentials('aws-profile')
         TF_VAR_aws_role_arn         = credentials('aws-role-arn')
     }
@@ -51,7 +52,10 @@ pipeline {
                     dir("${TERRAFORM_DIR}") {
                         retry(3) {
                             timeout(time: 2, unit: 'MINUTES') {
-                                sh 'terraform init'
+                                sh """
+                                    terraform init \
+                                      -backend-config="backend/${params.ENVIRONMENT}.hcl"
+                                """
                             }
                         }
                     }
@@ -63,7 +67,8 @@ pipeline {
                     slackSend(
                         color: 'good',
                         message: """
-                            SUCCESS: terraform init
+                            SUCCESS: Terraform init
+                            Environment: ${params.ENVIRONMENT}
                             Job: ${env.JOB_NAME}
                             Build: #${env.BUILD_NUMBER}
                             URL: ${env.BUILD_URL}
@@ -76,14 +81,14 @@ pipeline {
                         color: 'danger',
                         message: """
                             FAILED: Terraform init
+                            Environment: ${params.ENVIRONMENT}
                             Job: ${env.JOB_NAME}
-                            URL: ${env.BUILD_URL}
                             Build: #${env.BUILD_NUMBER}
+                            URL: ${env.BUILD_URL}
                         """
                     )
                 }
             }
-
         }
 
         stage('Terraform Checks') {
@@ -91,7 +96,7 @@ pipeline {
                 stage('Format Check') {
                     steps {
                         container('terraform') {
-                            dir("$TERRAFORM_DIR") {
+                            dir("${TERRAFORM_DIR}") {
                                 sh 'terraform fmt -check -recursive'
                             }
                         }
@@ -101,7 +106,7 @@ pipeline {
                 stage('Validate') {
                     steps {
                         container('terraform') {
-                            dir("$TERRAFORM_DIR") {
+                            dir("${TERRAFORM_DIR}") {
                                 sh 'terraform validate'
                             }
                         }
@@ -116,9 +121,18 @@ pipeline {
                     dir("${TERRAFORM_DIR}") {
                         script {
                             if (params.ACTION == 'apply') {
-                                sh 'terraform plan -out=tfplan'
+                                sh """
+                                    terraform plan \
+                                      -var-file="environments/${params.ENVIRONMENT}.tfvars" \
+                                      -out=tfplan
+                                """
                             } else if (params.ACTION == 'destroy') {
-                                sh 'terraform plan -destroy -out=tfplan'
+                                sh """
+                                    terraform plan \
+                                      -destroy \
+                                      -var-file="environments/${params.ENVIRONMENT}.tfvars" \
+                                      -out=tfplan
+                                """
                             } else {
                                 error("Unsupported action: ${params.ACTION}")
                             }
@@ -128,25 +142,25 @@ pipeline {
             }
         }
 
-        stage('Terrafrom Apply') {
-            when {
-                expression {
-                    params.ACTION == 'apply' && (params.ENVIRONMENT == 'dev' || params.ENVIRONMENT == 'prod')
-                }
-            }
-
+        stage('Manual Approval') {
             steps {
                 timeout(time: 30, unit: 'MINUTES') {
                     input(
-                        message: 'Do you want to apply the Terraform changes?',
-                        ok: 'Apply'
+                        message: """
+                            Approve Terraform ${params.ACTION}
+                            for ${params.ENVIRONMENT}?
+                        """,
+                        ok: params.ACTION == 'apply' ? 'Apply' : 'Destroy'
                     )
                 }
+            }
+        }
+
+        stage('Terraform Execute') {
+            steps {
                 container('terraform') {
-                    dir("$TERRAFORM_DIR") {
-                        sh '''
-                            terraform apply -auto-approve
-                        '''
+                    dir("${TERRAFORM_DIR}") {
+                        sh 'terraform apply -auto-approve tfplan'
                     }
                 }
             }
@@ -155,15 +169,41 @@ pipeline {
 
     post {
         success {
-            echo 'Succeeded'
+            echo "Terraform ${params.ACTION} succeeded for ${params.ENVIRONMENT}"
+
+            slackSend(
+                color: 'good',
+                message: """
+                    SUCCESS: Terraform ${params.ACTION}
+                    Environment: ${params.ENVIRONMENT}
+                    Job: ${env.JOB_NAME}
+                    Build: #${env.BUILD_NUMBER}
+                    URL: ${env.BUILD_URL}
+                """
+            )
         }
 
         failure {
-            echo 'Failed'
+            echo "Terraform ${params.ACTION} failed for ${params.ENVIRONMENT}"
+
+            slackSend(
+                color: 'danger',
+                message: """
+                    FAILED: Terraform ${params.ACTION}
+                    Environment: ${params.ENVIRONMENT}
+                    Job: ${env.JOB_NAME}
+                    Build: #${env.BUILD_NUMBER}
+                    URL: ${env.BUILD_URL}
+                """
+            )
         }
 
         unstable {
-            echo 'Unstable'
+            echo 'Pipeline is unstable'
+        }
+
+        aborted {
+            echo 'Pipeline was aborted'
         }
 
         always {
