@@ -1,0 +1,45 @@
+Jenkins Pipeline Mental Model
+
+Note1:
+pipeline
+agent
+parameters
+environment
+options
+stages
+stage
+steps
+post
+
+Note2:
+stage
+  → when
+  → steps
+    → container
+      → dir
+        → withCredentials
+          → script, only for Groovy logic
+          → sh
+
+
+input(...) {
+    // Nothing is allowed here
+}
+
+timeout(...) {
+    // Steps to run within the timeout
+}
+
+when - is used at stage level
+parallel - is used at stage level
+if-else - is used at steps level and inside a script block. It's complete groovy syntax
+Jenkins Pipeline steps do not have names.
+
+
+post {
+    failure means the step/build failed
+    unstable means the build completed, but there were issues
+    success means everything passed
+    always runs regardless of result
+}
+

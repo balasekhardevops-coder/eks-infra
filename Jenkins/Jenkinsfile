@@ -25,9 +25,17 @@ pipeline {
         AWS_PROFILE                 = 'jhansi'
         AWS_CONFIG_FILE             = '/home/jenkins/.aws/config'
         AWS_SHARED_CREDENTIALS_FILE = '/home/jenkins/.aws/credentials'
+        TF_IN_AUTOMATION            = 'true'
+        TF_CLI_ARGS                 = '-no-color'
+        TF_VAR_aws_profile          = credentials('aws-profile')
+        TF_VAR_aws_role_arn         = credentials('aws-role-arn')
+    }
 
-        TF_VAR_aws_profile  = credentials('aws-profile')
-        TF_VAR_aws_role_arn = credentials('aws-role-arn')
+    options {
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+        timestamps()
+        timeout(time: 60, unit: 'MINUTES')
     }
 
     stages {
@@ -41,9 +49,62 @@ pipeline {
             steps {
                 container('terraform') {
                     dir("${TERRAFORM_DIR}") {
-                        sh '''
-                        terraform init
-                        '''
+                        retry(3) {
+                            timeout(time: 2, unit: 'MINUTES') {
+                                sh 'terraform init'
+                            }
+                        }
+                    }
+                }
+            }
+
+            post {
+                success {
+                    slackSend(
+                        color: 'good',
+                        message: """
+                            SUCCESS: terraform init
+                            Job: ${env.JOB_NAME}
+                            Build: #${env.BUILD_NUMBER}
+                            URL: ${env.BUILD_URL}
+                        """
+                    )
+                }
+
+                failure {
+                    slackSend(
+                        color: 'danger',
+                        message: """
+                            FAILED: Terraform init
+                            Job: ${env.JOB_NAME}
+                            URL: ${env.BUILD_URL}
+                            Build: #${env.BUILD_NUMBER}
+                        """
+                    )
+                }
+            }
+
+        }
+
+        stage('Terraform Checks') {
+            parallel {
+                stage('Format Check') {
+                    steps {
+                        container('terraform') {
+                            dir("$TERRAFORM_DIR") {
+                                sh 'terraform fmt -check -recursive'
+                            }
+                        }
+                    }
+                }
+
+                stage('Validate') {
+                    steps {
+                        container('terraform') {
+                            dir("$TERRAFORM_DIR") {
+                                sh 'terraform validate'
+                            }
+                        }
                     }
                 }
             }
@@ -53,8 +114,38 @@ pipeline {
             steps {
                 container('terraform') {
                     dir("${TERRAFORM_DIR}") {
+                        script {
+                            if (params.ACTION == 'apply') {
+                                sh 'terraform plan -out=tfplan'
+                            } else if (params.ACTION == 'destroy') {
+                                sh 'terraform plan -destroy -out=tfplan'
+                            } else {
+                                error("Unsupported action: ${params.ACTION}")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Terrafrom Apply') {
+            when {
+                expression {
+                    params.ACTION == 'apply' && params.ENVIRONMENT == 'dev'
+                }
+            }
+
+            steps {
+                timeout(time: 30, unit: 'MINUTES') {
+                    input(
+                        message: 'Do you want to apply the Terraform changes?',
+                        ok: 'Apply'
+                    )
+                }
+                container('terraform') {
+                    dir("$TERRAFORM_DIR") {
                         sh '''
-                        terraform plan
+                            terraform apply -auto-approve
                         '''
                     }
                 }
